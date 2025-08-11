@@ -93,13 +93,151 @@ To get started with DigitalOcean bare metal GPU instances, you'll need to contac
 
 ### Step 2: Initial Configuration
 
-*Instructions to be added*
+Once you receive your DigitalOcean bare metal GPU instances, follow these initial setup steps to verify connectivity and prepare the systems for NCCL installation.
+
+#### 2.1 Connect to Your Instances
+
+Use the SSH credentials provided by DigitalOcean to connect to each instance:
+
+```bash
+# Using SSH key (recommended)
+ssh -i /path/to/your/private-key root@<instance-ip>
+
+# Or using password if provided
+ssh root@<instance-ip>
+```
+
+#### 2.2 Verify System Access
+
+Confirm you can access all your instances and check basic system information:
+
+```bash
+# Check hostname and system info
+hostname
+uname -a
+
+# Verify GPU detection (should show your GPUs even without drivers)
+lspci | grep -i nvidia
+
+# Check available memory and CPU
+free -h
+lscpu
+```
+
+#### 2.3 Update System Packages
+
+Update the system packages on all instances before proceeding:
+
+```bash
+# Update Ubuntu system packages
+sudo apt update && sudo apt upgrade -y
+
+# Install essential tools that may be needed
+sudo apt install -y curl wget vim htop
+```
+
+#### 2.4 Verify Hostnames and Basic Networking
+
+Check your current hostname and network configuration:
+
+```bash
+# Check current hostname (keep the existing one)
+hostname
+
+# Verify network interfaces - focus on bond0 interface
+ip addr show bond0
+
+# The output should show something like:
+# bond0: <BROADCAST,MULTICAST,MASTER,UP,LOWER_UP> mtu 9000 qdisc noqueue state UP
+#   inet 10.x.x.x/24 brd 10.x.x.255 scope global bond0
+```
+
+**Important Network Configuration Notes:**
+- DigitalOcean bare metal instances use a **bond0** interface for high-performance networking
+- Each instance has a **private IP** on the 10.x.x.x range - this is what you'll use for NCCL communication
+- The public IP is managed through VPC Gateway with 1:1 NAT - **do not use public IPs for NCCL tests**
+
+```bash
+# Test network connectivity between nodes using PRIVATE IPs
+# Replace with your actual private IPs from bond0 interface
+ping 10.x.x.x
+```
+
+> **Note**: DigitalOcean assigns unique hostnames to each instance. Keep these existing hostnames as they help identify your specific bare metal instances.
+
+> **Network Important**: Always use the **private IP addresses** from the bond0 interface for NCCL communication, not the public IPs. NCCL will utilize the backend network infrastructure for optimal GPU-to-GPU communication.
+
+#### 2.5 Create Hosts File (Multi-Node Setup)
+
+If you're setting up multiple instances, create a hosts file using the private IP addresses from bond0:
+
+```bash
+# Edit /etc/hosts on each node
+sudo nano /etc/hosts
+
+# Add entries using PRIVATE IPs from bond0 interface (example):
+# 10.45.170.76  node1-hostname
+# 10.45.170.77  node2-hostname  
+# 10.45.170.78  node3-hostname
+```
+
+> **Note**: Use the actual hostnames from the `hostname` command and the **private IP addresses** from `ip addr show bond0`. These private IPs are essential for NCCL inter-node communication.
+
+> **Note**: Make sure all instances are accessible and can communicate with each other before proceeding to the dependency installation steps. This basic setup ensures a solid foundation for the NCCL configuration that follows.
 
 ## Installing Dependencies
 
 ### Step 3: Install NVIDIA Drivers
 
-*Instructions to be added*
+Before installing new drivers, let's check what's currently installed on your DigitalOcean bare metal instances.
+
+#### 3.1 Check Current NVIDIA and CUDA Installation
+
+First, verify if NVIDIA drivers and CUDA are already installed:
+
+```bash
+# Check if NVIDIA drivers are installed
+nvidia-smi
+
+# Check NVIDIA driver version (if installed)
+cat /proc/driver/nvidia/version
+
+# Check CUDA version (if installed)
+nvcc --version
+
+# Alternative CUDA check
+cat /usr/local/cuda/version.txt
+
+# Check what NVIDIA packages are installed via apt
+dpkg -l | grep -i nvidia
+
+# Check CUDA packages
+dpkg -l | grep -i cuda
+```
+
+#### 3.2 Verify GPU Detection
+
+Even without drivers, you should be able to see your GPUs:
+
+```bash
+# List all GPUs detected by the system
+lspci | grep -i nvidia
+
+# Get more detailed GPU information
+lspci -v | grep -i nvidia -A 12
+```
+
+#### 3.3 Installation Decision
+
+Based on the output above:
+
+- **If drivers are already installed**: Verify they're working properly with `nvidia-smi`
+- **If no drivers are installed**: Proceed with the installation steps below
+- **If drivers are installed but not working**: You may need to reinstall or update
+
+#### 3.4 Install NVIDIA Drivers (if needed)
+
+*Installation instructions will be added based on current system state*
 
 ### Step 4: Install CUDA Toolkit
 
