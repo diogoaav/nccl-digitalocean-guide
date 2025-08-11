@@ -256,9 +256,80 @@ If you need to install NVIDIA drivers or CUDA, refer to NVIDIA's official docume
 
 > **Important**: After any driver or CUDA installation, reboot your instances and verify the installation using the commands from section 3.1 before proceeding to the next steps.
 
-### Step 4: Install CUDA Toolkit
+### Step 4: Install NCCL
 
-*Instructions to be added*
+Now that you have NVIDIA drivers and CUDA working (verified in Step 3), let's install NCCL for multi-GPU communication.
+
+#### 4.1 Check if NCCL is Already Installed
+
+First, check if NCCL is already available on your system:
+
+```bash
+# Check for NCCL library files
+find /usr -name "*nccl*" 2>/dev/null
+
+# Check for NCCL in common locations
+ls /usr/lib/x86_64-linux-gnu/libnccl* 2>/dev/null
+ls /usr/local/cuda/lib64/libnccl* 2>/dev/null
+
+# Check NCCL version (if installed)
+cat /usr/include/nccl.h | grep NCCL_VERSION_CODE 2>/dev/null
+```
+
+#### 4.2 Install NCCL
+
+If NCCL is not installed or you need a specific version, install it using one of these methods:
+
+**Method 1: Install via APT (Recommended for Ubuntu)**
+
+```bash
+# Add NVIDIA package repository (if not already added)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu$(lsb_release -rs | tr -d .)/x86_64/cuda-keyring_1.0-1_all.deb
+sudo dpkg -i cuda-keyring_1.0-1_all.deb
+sudo apt update
+
+# Install NCCL runtime and development packages
+sudo apt install libnccl2 libnccl-dev
+```
+
+**Method 2: Download from NVIDIA (Alternative)**
+
+Visit [NVIDIA NCCL Download Page](https://developer.nvidia.com/nccl/nccl-download) and follow the instructions for your specific CUDA version.
+
+#### 4.3 Verify NCCL Installation
+
+After installation, verify NCCL is properly installed:
+
+```bash
+# Check NCCL library files are present
+ls -la /usr/lib/x86_64-linux-gnu/libnccl*
+
+# Verify NCCL version
+cat /usr/include/nccl.h | grep NCCL_VERSION
+
+# Check if NCCL can be found by the linker
+ldconfig -p | grep nccl
+```
+
+#### 4.4 Install NCCL Tests (Important for our guide)
+
+Install the NCCL tests that we'll use for benchmarking:
+
+```bash
+# Clone NCCL tests repository
+git clone https://github.com/NVIDIA/nccl-tests.git
+cd nccl-tests
+
+# Build the tests
+make
+
+# Verify the build was successful
+ls -la build/
+```
+
+The tests should now be available in the `build/` directory and ready for use in the testing steps.
+
+> **Note**: If you encounter any build errors, ensure that your CUDA environment variables are properly set and that you have development tools installed (`build-essential` package).
 
 ### Step 5: Install NCCL
 
