@@ -226,24 +226,9 @@ lspci | grep -i nvidia
 lspci -v | grep -i nvidia -A 12
 ```
 
-#### 3.3 Installation Decision and Next Steps
+#### 3.3 Installation Resources
 
-Based on the output from sections 3.1 and 3.2, determine your next steps:
-
-**Scenario 1: Both NVIDIA Drivers and CUDA are installed and working**
-- `nvidia-smi` shows GPU information successfully
-- `nvcc --version` shows CUDA version
-- **Action**: Skip to Step 4 (Install NCCL) - you're ready to proceed
-
-**Scenario 2: Drivers or CUDA not present or not working properly**
-- `nvidia-smi` command not found, fails, or returns errors
-- `nvcc --version` fails or returns errors
-- Commands exist but show inconsistent information
-- **Action**: Install them using step 3.4 below
-
-#### 3.4 Installation Resources
-
-If you need to install NVIDIA drivers or CUDA, refer to NVIDIA's official documentation:
+If drivers or CUDA are not available, refer to NVIDIA's official documentation:
 
 **NVIDIA Driver Installation:**
 - **Official Guide**: [NVIDIA Driver Installation Guide for Linux](https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html)
