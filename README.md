@@ -406,32 +406,56 @@ export NCCL_DEBUG=ERROR
            4K            1024     float     sum      -1    15.6    0.26    0.45      0    15.5    0.26    0.45      0
 ```
 
-#### 6.3 Comprehensive Single Node Test Suite
-
-Run multiple NCCL operations to thoroughly test GPU communication:
+You can also test other NCCL operations individually:
 
 ```bash
-# Set clean output (only show errors)
-export NCCL_DEBUG=ERROR
-
-# All-Reduce test (most common operation)
-echo "=== Running All-Reduce Test ==="
-./build/all_reduce_perf -b 8 -e 128M -f 2
-
-# All-Gather test
-echo "=== Running All-Gather Test ==="
+# Test all-gather operation
 ./build/all_gather_perf -b 8 -e 128M -f 2
-
-# Broadcast test
-echo "=== Running Broadcast Test ==="
-./build/broadcast_perf -b 8 -e 128M -f 2
-
-# Reduce-Scatter test
-echo "=== Running Reduce-Scatter Test ==="
-./build/reduce_scatter_perf -b 8 -e 128M -f 2
 ```
 
-#### 6.4 Bandwidth and Latency Analysis
+**Expected All-Gather Output Example:**
+```
+# Collective test starting: all_gather_perf
+# nThread 1 nGpus 1 minBytes 8 maxBytes 134217728 step: 2(factor) warmup iters: 5 iters: 20 agg iters: 1 validation: 1 graph: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid  16200 on am4g2r31bm1 device  0 [0000:19:00] NVIDIA H100 80GB HBM3
+#
+#                                                              out-of-place                       in-place          
+#       size         count      type   redop    root     time   algbw   busbw #wrong     time   algbw   busbw #wrong
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)            (us)  (GB/s)  (GB/s)       
+           0             0     float    none      -1     8.00    0.00    0.00      0     6.11    0.00    0.00      0
+          16             4     float    none      -1     7.96    0.00    0.00      0     3.32    0.00    0.00      0
+          32             8     float    none      -1     7.64    0.00    0.00      0     3.48    0.01    0.00      0
+          64            16     float    none      -1     7.61    0.01    0.00      0     3.32    0.02    0.00      0
+         128            32     float    none      -1     6.96    0.02    0.00      0     2.91    0.04    0.00      0
+         256            64     float    none      -1     6.80    0.04    0.00      0     2.91    0.09    0.00      0
+         512           128     float    none      -1     7.40    0.07    0.00      0     2.62    0.20    0.00      0
+        1024           256     float    none      -1     6.35    0.16    0.00      0     2.62    0.39    0.00      0
+        2048           512     float    none      -1     6.30    0.33    0.00      0     2.61    0.78    0.00      0
+        4096          1024     float    none      -1     6.22    0.66    0.00      0     2.54    1.61    0.00      0
+        8192          2048     float    none      -1     5.79    1.42    0.00      0     2.38    3.45    0.00      0
+       16384          4096     float    none      -1     5.29    3.10    0.00      0     2.18    7.51    0.00      0
+       32768          8192     float    none      -1     5.30    6.18    0.00      0     2.01   16.34    0.00      0
+       65536         16384     float    none      -1     4.65   14.09    0.00      0     1.68   38.97    0.00      0
+      131072         32768     float    none      -1     4.30   30.47    0.00      0     1.62   80.80    0.00      0
+      262144         65536     float    none      -1     4.19   62.62    0.00      0     1.63  160.83    0.00      0
+      524288        131072     float    none      -1     4.30  121.93    0.00      0     1.63  321.67    0.00      0
+     1048576        262144     float    none      -1     4.81  218.17    0.00      0     1.63  641.84    0.00      0
+     2097152        524288     float    none      -1     5.72  366.33    0.00      0     1.62  1291.55    0.00      0
+     4194304       1048576     float    none      -1     7.07  593.31    0.00      0     1.63  2577.62    0.00      0
+     8388608       2097152     float    none      -1    10.32  813.11    0.00      0     1.63  5154.77    0.00      0
+    16777216       4194304     float    none      -1    17.03  985.19    0.00      0     1.63  10324.12    0.00      0
+    33554432       8388608     float    none      -1    30.16  1112.73    0.00      0     1.63  20616.53    0.00      0
+    67108864      16777216     float    none      -1    55.19  1215.85    0.00      0     1.62  41352.47    0.00      0
+   134217728      33554432     float    none      -1    105.9  1267.88    0.00      0     1.62  82732.99    0.00      0
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 0 
+#
+# Collective test concluded: all_gather_perf
+```
+
+#### 6.3 Bandwidth and Latency Analysis
 
 Test different message sizes to analyze bandwidth and latency characteristics:
 
@@ -452,7 +476,7 @@ echo "=== Testing Large Messages (Bandwidth) ==="
 ./build/all_reduce_perf -b 16M -e 512M -f 2
 ```
 
-#### 6.5 Performance Validation
+#### 6.4 Performance Validation
 
 Create a simple script to run comprehensive single-node validation:
 
@@ -503,7 +527,7 @@ chmod +x ~/single_node_test.sh
 ~/single_node_test.sh
 ```
 
-#### 6.6 Interpreting Results
+#### 6.5 Interpreting Results
 
 Understanding the output from NCCL tests:
 
@@ -520,7 +544,7 @@ Understanding the output from NCCL tests:
 - High bandwidth for large messages (>50GB/s for modern GPUs)
 - Low latency for small messages (<20μs)
 
-#### 6.7 Troubleshooting Single Node Issues
+#### 6.6 Troubleshooting Single Node Issues
 
 If you encounter issues, try these debugging steps:
 
