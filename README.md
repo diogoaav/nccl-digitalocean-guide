@@ -227,17 +227,41 @@ lspci | grep -i nvidia
 lspci -v | grep -i nvidia -A 12
 ```
 
-#### 3.3 Installation Decision
+#### 3.3 Installation Decision and Next Steps
 
-Based on the output above:
+Based on the output from sections 3.1 and 3.2, determine your next steps:
 
-- **If drivers are already installed**: Verify they're working properly with `nvidia-smi`
-- **If no drivers are installed**: Proceed with the installation steps below
-- **If drivers are installed but not working**: You may need to reinstall or update
+**Scenario 1: Both NVIDIA Drivers and CUDA are installed and working**
+- `nvidia-smi` shows GPU information successfully
+- `nvcc --version` shows CUDA version
+- **Action**: Skip to Step 4 (Install NCCL) - you're ready to proceed
 
-#### 3.4 Install NVIDIA Drivers (if needed)
+**Scenario 2: NVIDIA Drivers installed but CUDA missing**
+- `nvidia-smi` works but `nvcc --version` fails
+- **Action**: Install CUDA Toolkit (see CUDA installation guide below)
 
-*Installation instructions will be added based on current system state*
+**Scenario 3: Neither drivers nor CUDA installed**
+- `nvidia-smi` command not found or fails
+- `nvcc --version` fails
+- **Action**: Install both NVIDIA drivers and CUDA (see installation guides below)
+
+**Scenario 4: Drivers/CUDA installed but not working properly**
+- Commands exist but return errors or inconsistent information
+- **Action**: May need to reinstall - follow troubleshooting guides below
+
+#### 3.4 Installation Resources
+
+If you need to install NVIDIA drivers or CUDA, refer to NVIDIA's official documentation:
+
+**NVIDIA Driver Installation:**
+- **Official Guide**: [NVIDIA Driver Installation Guide for Linux](https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html)
+- **Ubuntu-specific**: [NVIDIA Driver Installation on Ubuntu](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#ubuntu-installation)
+
+**CUDA Toolkit Installation:**
+- **Official Guide**: [CUDA Installation Guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html)
+- **Ubuntu Package Installation**: [CUDA Ubuntu Installation](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#ubuntu)
+
+> **Important**: After any driver or CUDA installation, reboot your instances and verify the installation using the commands from section 3.1 before proceeding to the next steps.
 
 ### Step 4: Install CUDA Toolkit
 
