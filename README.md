@@ -474,7 +474,213 @@ export NCCL_DEBUG=ERROR
 
 ### Step 7: Multi-Node Testing
 
-*Instructions to be added*
+Multi-node testing validates NCCL communication between GPUs across different machines over the network. This tests your distributed GPU cluster's ability to handle real-world workloads like distributed training.
+
+#### 7.1 Basic Multi-Node All-Reduce Test
+
+Start with a simple 2-node test to verify inter-node communication:
+
+```bash
+# On the MASTER node (typically the first node)
+cd ~/nccl-tests
+
+# Set clean output for easier reading
+export NCCL_DEBUG=ERROR
+
+# Create a hostfile with your nodes (replace with actual hostnames)
+cat > ~/hostfile << EOF
+<node1-hostname> slots=<gpu-count-node1>
+<node2-hostname> slots=<gpu-count-node2>
+EOF
+
+# Run multi-node all-reduce test using mpirun
+# This example uses 2 nodes with 2 GPUs each (total 4 GPUs)
+mpirun -np 4 -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ./build/all_reduce_perf -b 1M -e 128M -f 2
+```
+
+> **Note**: Replace `<node1-hostname>`, `<node2-hostname>` with your actual hostnames, and `<gpu-count-nodeX>` with the number of GPUs on each node.
+
+#### 7.2 Alternative Method: Manual Multi-Node Testing
+
+If MPI is not available, you can test multi-node manually using NCCL's built-in coordination:
+
+```bash
+# Method 1: Using NCCL_COMM_ID (Recommended)
+# On Node 1 (master), generate a communication ID:
+cd ~/nccl-tests
+export NCCL_DEBUG=ERROR
+export MASTER_ADDR=<node1-private-ip>
+export MASTER_PORT=23456
+export WORLD_SIZE=4  # Total GPUs across all nodes
+export RANK=0        # Node 1 ranks: 0,1
+
+# Start the test on Node 1
+./build/all_reduce_perf -b 1M -e 128M -f 2 -g 2 &
+
+# On Node 2, connect to the master:
+export NCCL_DEBUG=ERROR
+export MASTER_ADDR=<node1-private-ip>
+export MASTER_PORT=23456
+export WORLD_SIZE=4
+export RANK=2        # Node 2 ranks: 2,3
+
+./build/all_reduce_perf -b 1M -e 128M -f 2 -g 2
+```
+
+#### 7.3 Comprehensive Multi-Node Test Script
+
+Create an automated script to test various multi-node scenarios:
+
+```bash
+# Create multi-node test script
+cat > ~/multi_node_test.sh << 'EOF'
+#!/bin/bash
+
+echo "=== NCCL Multi-Node Performance Test ==="
+echo "Date: $(date)"
+echo ""
+
+# Configuration
+MASTER_NODE="<node1-hostname>"
+WORKER_NODES="<node2-hostname> <node3-hostname>"  # Add more as needed
+MASTER_IP="<node1-private-ip>"
+
+# Verify all nodes are accessible
+echo "=== Verifying Node Connectivity ==="
+for node in $MASTER_NODE $WORKER_NODES; do
+    echo "Checking $node..."
+    ssh $node "hostname && nvidia-smi --list-gpus | wc -l" || {
+        echo "ERROR: Cannot access $node"
+        exit 1
+    }
+done
+echo ""
+
+# Count total GPUs across all nodes
+TOTAL_GPUS=0
+for node in $MASTER_NODE $WORKER_NODES; do
+    GPU_COUNT=$(ssh $node "nvidia-smi --list-gpus | wc -l")
+    echo "$node has $GPU_COUNT GPUs"
+    TOTAL_GPUS=$((TOTAL_GPUS + GPU_COUNT))
+done
+echo "Total GPUs across all nodes: $TOTAL_GPUS"
+echo ""
+
+# Create hostfile for MPI
+echo "=== Creating hostfile ==="
+rm -f ~/hostfile
+for node in $MASTER_NODE $WORKER_NODES; do
+    GPU_COUNT=$(ssh $node "nvidia-smi --list-gpus | wc -l")
+    echo "$node slots=$GPU_COUNT" >> ~/hostfile
+done
+cat ~/hostfile
+echo ""
+
+# Test 1: Multi-node latency test
+echo "=== Test 1: Multi-Node Latency Test ==="
+mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ~/nccl-tests/build/all_reduce_perf -b 4 -e 1K -f 2
+echo ""
+
+# Test 2: Multi-node bandwidth test  
+echo "=== Test 2: Multi-Node Bandwidth Test ==="
+mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ~/nccl-tests/build/all_reduce_perf -b 32M -e 128M -f 2
+echo ""
+
+# Test 3: All-gather test
+echo "=== Test 3: Multi-Node All-Gather Test ==="
+mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ~/nccl-tests/build/all_gather_perf -b 8M -e 32M -f 2
+echo ""
+
+echo "=== Multi-Node Testing Complete ==="
+EOF
+
+# Make script executable
+chmod +x ~/multi_node_test.sh
+
+# Install OpenMPI if not present
+sudo apt update
+sudo apt install -y openmpi-bin openmpi-common libopenmpi-dev
+
+# Run the multi-node test
+~/multi_node_test.sh
+```
+
+#### 7.4 Expected Multi-Node Performance
+
+Multi-node performance will be different from single-node due to network limitations:
+
+**Expected Characteristics:**
+- **Latency**: Higher base latency (50-200μs) due to network communication
+- **Bandwidth**: Limited by network speed (typically 25-100Gbps per node)
+- **Scaling**: Performance depends on network topology and number of nodes
+- **Consistency**: May show more variation due to network conditions
+
+**Typical Performance Ranges:**
+- **Small messages**: 0.01 - 1 GB/s (latency-bound)
+- **Medium messages**: 1 - 10 GB/s (network transition)  
+- **Large messages**: 10 - 25 GB/s (network bandwidth-bound)
+
+#### 7.5 Interpreting Multi-Node Results
+
+Key metrics to evaluate:
+
+- **Network Latency**: Base latency should be <200μs for good network
+- **Network Bandwidth**: Should approach your network speed (25Gbps ≈ 3GB/s per link)
+- **Scaling Efficiency**: Compare multi-node vs single-node bandwidth ratios
+- **Error Rate**: Should still be 0 errors across all tests
+
+#### 7.6 Troubleshooting Multi-Node Issues
+
+Common multi-node problems and solutions:
+
+```bash
+# Problem: SSH connectivity issues
+# Solution: Verify SSH keys and network connectivity
+for node in <node1> <node2>; do
+    ssh -o ConnectTimeout=5 $node "echo SSH OK" || echo "SSH FAILED to $node"
+done
+
+# Problem: NCCL cannot find network interface
+# Solution: Verify bond0 interface and NCCL_SOCKET_IFNAME
+ssh <node> "ip addr show bond0 && echo \$NCCL_SOCKET_IFNAME"
+
+# Problem: Firewall blocking NCCL communication
+# Solution: Check and configure firewall (if needed)
+sudo ufw status
+# NCCL typically uses random high ports, ensure they're open
+
+# Problem: MPI not finding hosts
+# Solution: Verify hostfile format and DNS resolution
+cat ~/hostfile
+nslookup <node-hostname>
+
+# Problem: High latency or low bandwidth
+# Solution: Check network configuration and utilization
+# Test raw network performance between nodes
+iperf3 -s  # On one node
+iperf3 -c <node-ip> -t 30  # From another node
+
+# Problem: GPU memory errors across nodes
+# Solution: Check GPU memory on all nodes
+for node in <node1> <node2>; do
+    echo "=== GPU Memory on $node ==="
+    ssh $node "nvidia-smi --query-gpu=memory.used,memory.total --format=csv"
+done
+```
+
+> **Important**: Multi-node testing validates your distributed GPU cluster setup. Successful multi-node tests indicate your system is ready for distributed training workloads. If you encounter issues, verify network connectivity, SSH setup, and NCCL environment variables on all nodes.
 
 ### Step 8: Performance Benchmarking
 
