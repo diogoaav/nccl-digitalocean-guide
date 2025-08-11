@@ -434,6 +434,47 @@ export NCCL_DEBUG=ERROR
 # Collective test concluded: all_reduce_perf
 ```
 
+**Understanding These Results:**
+
+**Test Configuration:**
+- **2 GPUs**: Two NVIDIA H100 80GB HBM3 GPUs (device 0 and device 1)
+- **Message Range**: Testing from 1KB to 1GB message sizes
+- **Algorithm**: All-reduce with sum operation
+- **Iterations**: 5 warmup iterations + 20 measurement iterations per test
+
+**Performance Analysis:**
+
+1. **Small Messages (1KB - 32KB)**: 
+   - **Latency-dominated**: Time is relatively constant (~12-16μs)
+   - **Low bandwidth**: 0.07 - 2.6 GB/s
+   - **Communication overhead** is the main factor, not data transfer
+
+2. **Medium Messages (64KB - 4MB)**:
+   - **Transition zone**: Bandwidth grows from 4.67 GB/s to 119 GB/s
+   - **Efficiency improves**: Better utilization of GPU interconnect
+   - **Sweet spot** for many distributed training workloads
+
+3. **Large Messages (8MB - 1GB)**:
+   - **Bandwidth-dominated**: Peak performance of 358 GB/s
+   - **Excellent scaling**: Shows the full capability of H100 interconnect
+   - **Consistent performance**: Both out-of-place and in-place show similar results
+
+**Key Performance Indicators:**
+- ✅ **No errors**: `#wrong = 0` for all tests
+- ✅ **High peak bandwidth**: 358 GB/s is excellent for H100 GPUs
+- ✅ **Good scaling**: Bandwidth increases consistently with message size
+- ✅ **Low latency**: ~12-16μs base latency is very good
+- ✅ **Average bus bandwidth**: 125.437 GB/s across all message sizes
+
+**What This Means:**
+- Your GPU setup is working optimally
+- Inter-GPU communication is performing at expected H100 levels
+- Ready for distributed training workloads
+- No hardware or configuration issues detected
+
+You can also test other NCCL operations individually:
+```
+
 
 #### 6.3 Bandwidth and Latency Analysis
 
