@@ -236,18 +236,11 @@ Based on the output from sections 3.1 and 3.2, determine your next steps:
 - `nvcc --version` shows CUDA version
 - **Action**: Skip to Step 4 (Install NCCL) - you're ready to proceed
 
-**Scenario 2: NVIDIA Drivers installed but CUDA missing**
-- `nvidia-smi` works but `nvcc --version` fails
-- **Action**: Install CUDA Toolkit (see CUDA installation guide below)
-
-**Scenario 3: Neither drivers nor CUDA installed**
-- `nvidia-smi` command not found or fails
-- `nvcc --version` fails
-- **Action**: Install both NVIDIA drivers and CUDA (see installation guides below)
-
-**Scenario 4: Drivers/CUDA installed but not working properly**
-- Commands exist but return errors or inconsistent information
-- **Action**: May need to reinstall - follow troubleshooting guides below
+**Scenario 2: Drivers or CUDA not present or not working properly**
+- `nvidia-smi` command not found, fails, or returns errors
+- `nvcc --version` fails or returns errors
+- Commands exist but show inconsistent information
+- **Action**: Install them using step 3.4 below
 
 #### 3.4 Installation Resources
 
