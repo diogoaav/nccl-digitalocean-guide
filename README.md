@@ -396,6 +396,51 @@ export NCCL_DEBUG=ERROR
 - `NCCL_DEBUG=INFO` - Show informational messages (verbose)
 - `NCCL_DEBUG=TRACE` - Show all debug information (very verbose)
 
+```
+# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 2 minBytes 1024 maxBytes 1073741824 step: 2(factor) warmup iters: 5 iters: 20 agg iters: 1 validation: 1 graph: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid  15386 on am4g2r31bm1 device  0 [0000:19:00] NVIDIA H100 80GB HBM3
+#  Rank  1 Group  0 Pid  15386 on am4g2r31bm1 device  1 [0000:3b:00] NVIDIA H100 80GB HBM3
+#
+#                                                              out-of-place                       in-place          
+#       size         count      type   redop    root     time   algbw   busbw #wrong     time   algbw   busbw #wrong
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)            (us)  (GB/s)  (GB/s)       
+        1024           256     float     sum      -1    15.75    0.07    0.07      0    14.46    0.07    0.07      0
+        2048           512     float     sum      -1    14.16    0.14    0.14      0    13.56    0.15    0.15      0
+        4096          1024     float     sum      -1    13.10    0.31    0.31      0    13.10    0.31    0.31      0
+        8192          2048     float     sum      -1    12.32    0.66    0.66      0    12.92    0.63    0.63      0
+       16384          4096     float     sum      -1    12.17    1.35    1.35      0    12.66    1.29    1.29      0
+       32768          8192     float     sum      -1    12.68    2.58    2.58      0    12.61    2.60    2.60      0
+       65536         16384     float     sum      -1    14.05    4.67    4.67      0    13.58    4.83    4.83      0
+      131072         32768     float     sum      -1    15.62    8.39    8.39      0    15.44    8.49    8.49      0
+      262144         65536     float     sum      -1    17.68   14.83   14.83      0    16.94   15.47   15.47      0
+      524288        131072     float     sum      -1    17.23   30.43   30.43      0    17.50   29.96   29.96      0
+     1048576        262144     float     sum      -1    26.30   39.88   39.88      0    26.02   40.29   40.29      0
+     2097152        524288     float     sum      -1    30.67   68.38   68.38      0    30.24   69.34   69.34      0
+     4194304       1048576     float     sum      -1    35.13  119.39  119.39      0    35.01  119.81  119.81      0
+     8388608       2097152     float     sum      -1    47.86  175.26  175.26      0    46.89  178.88  178.88      0
+    16777216       4194304     float     sum      -1    73.28  228.94  228.94      0    71.02  236.24  236.24      0
+    33554432       8388608     float     sum      -1    127.7  262.68  262.68      0    126.0  266.33  266.33      0
+    67108864      16777216     float     sum      -1    223.4  300.35  300.35      0    223.4  300.34  300.34      0
+   134217728      33554432     float     sum      -1    415.0  323.41  323.41      0    415.3  323.19  323.19      0
+   268435456      67108864     float     sum      -1    792.7  338.64  338.64      0    793.8  338.18  338.18      0
+   536870912     134217728     float     sum      -1   1541.7  348.22  348.22      0   1543.5  347.82  347.82      0
+  1073741824     268435456     float     sum      -1   2996.1  358.38  358.38      0   3006.4  357.15  357.15      0
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 125.437 
+#
+# Collective test concluded: all_reduce_perf
+```
+
+You can also test other NCCL operations individually:
+
+```bash
+# Test all-gather operation
+./build/all_gather_perf -b 8 -e 128M -f 2
+```
+
 **Expected Output Example:**
 ```
 # nThread 1 nGpus X test 0
