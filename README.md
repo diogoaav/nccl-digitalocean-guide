@@ -476,211 +476,192 @@ export NCCL_DEBUG=ERROR
 
 Multi-node testing validates NCCL communication between GPUs across different machines over the network. This tests your distributed GPU cluster's ability to handle real-world workloads like distributed training.
 
-#### 7.1 Basic Multi-Node All-Reduce Test
+#### 7.1 RoCE Performance Validation Test
 
-Start with a simple 2-node test to verify inter-node communication:
+This test validates RoCE (RDMA over Converged Ethernet) performance between two nodes using all 16 GPUs (8 GPUs per node) to measure inter-node GPU communication capabilities.
 
 ```bash
-# On the MASTER node (typically the first node)
+# On the MASTER node (first node)
 cd ~/nccl-tests
 
-# Set clean output for easier reading
+# Set clean output for RoCE performance testing
 export NCCL_DEBUG=ERROR
 
-# Create a hostfile with your nodes (replace with actual hostnames)
+# Create hostfile for 2 nodes with 8 GPUs each
 cat > ~/hostfile << EOF
-<node1-hostname> slots=<gpu-count-node1>
-<node2-hostname> slots=<gpu-count-node2>
+<node1-hostname> slots=8
+<node2-hostname> slots=8
 EOF
 
-# Run multi-node all-reduce test using mpirun
-# This example uses 2 nodes with 2 GPUs each (total 4 GPUs)
-mpirun -np 4 -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ./build/all_reduce_perf -b 1M -e 128M -f 2
-```
-
-> **Note**: Replace `<node1-hostname>`, `<node2-hostname>` with your actual hostnames, and `<gpu-count-nodeX>` with the number of GPUs on each node.
-
-#### 7.2 Alternative Method: Manual Multi-Node Testing
-
-If MPI is not available, you can test multi-node manually using NCCL's built-in coordination:
-
-```bash
-# Method 1: Using NCCL_COMM_ID (Recommended)
-# On Node 1 (master), generate a communication ID:
-cd ~/nccl-tests
-export NCCL_DEBUG=ERROR
-export MASTER_ADDR=<node1-private-ip>
-export MASTER_PORT=23456
-export WORLD_SIZE=4  # Total GPUs across all nodes
-export RANK=0        # Node 1 ranks: 0,1
-
-# Start the test on Node 1
-./build/all_reduce_perf -b 1M -e 128M -f 2 -g 2 &
-
-# On Node 2, connect to the master:
-export NCCL_DEBUG=ERROR
-export MASTER_ADDR=<node1-private-ip>
-export MASTER_PORT=23456
-export WORLD_SIZE=4
-export RANK=2        # Node 2 ranks: 2,3
-
-./build/all_reduce_perf -b 1M -e 128M -f 2 -g 2
-```
-
-#### 7.3 Comprehensive Multi-Node Test Script
-
-Create an automated script to test various multi-node scenarios:
-
-```bash
-# Create multi-node test script
-cat > ~/multi_node_test.sh << 'EOF'
-#!/bin/bash
-
-echo "=== NCCL Multi-Node Performance Test ==="
-echo "Date: $(date)"
-echo ""
-
-# Configuration
-MASTER_NODE="<node1-hostname>"
-WORKER_NODES="<node2-hostname> <node3-hostname>"  # Add more as needed
-MASTER_IP="<node1-private-ip>"
-
-# Verify all nodes are accessible
-echo "=== Verifying Node Connectivity ==="
-for node in $MASTER_NODE $WORKER_NODES; do
-    echo "Checking $node..."
-    ssh $node "hostname && nvidia-smi --list-gpus | wc -l" || {
-        echo "ERROR: Cannot access $node"
-        exit 1
-    }
-done
-echo ""
-
-# Count total GPUs across all nodes
-TOTAL_GPUS=0
-for node in $MASTER_NODE $WORKER_NODES; do
-    GPU_COUNT=$(ssh $node "nvidia-smi --list-gpus | wc -l")
-    echo "$node has $GPU_COUNT GPUs"
-    TOTAL_GPUS=$((TOTAL_GPUS + GPU_COUNT))
-done
-echo "Total GPUs across all nodes: $TOTAL_GPUS"
-echo ""
-
-# Create hostfile for MPI
-echo "=== Creating hostfile ==="
-rm -f ~/hostfile
-for node in $MASTER_NODE $WORKER_NODES; do
-    GPU_COUNT=$(ssh $node "nvidia-smi --list-gpus | wc -l")
-    echo "$node slots=$GPU_COUNT" >> ~/hostfile
-done
-cat ~/hostfile
-echo ""
-
-# Test 1: Multi-node latency test
-echo "=== Test 1: Multi-Node Latency Test ==="
-mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ~/nccl-tests/build/all_reduce_perf -b 4 -e 1K -f 2
-echo ""
-
-# Test 2: Multi-node bandwidth test  
-echo "=== Test 2: Multi-Node Bandwidth Test ==="
-mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ~/nccl-tests/build/all_reduce_perf -b 32M -e 128M -f 2
-echo ""
-
-# Test 3: All-gather test
-echo "=== Test 3: Multi-Node All-Gather Test ==="
-mpirun -np $TOTAL_GPUS -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ~/nccl-tests/build/all_gather_perf -b 8M -e 32M -f 2
-echo ""
-
-echo "=== Multi-Node Testing Complete ==="
-EOF
-
-# Make script executable
-chmod +x ~/multi_node_test.sh
-
-# Install OpenMPI if not present
+# Install OpenMPI if not already present
 sudo apt update
 sudo apt install -y openmpi-bin openmpi-common libopenmpi-dev
 
-# Run the multi-node test
-~/multi_node_test.sh
+# Test 1: RoCE Latency Test (Small Messages)
+echo "=== RoCE Latency Test (Small Messages) ==="
+mpirun -np 16 -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ./build/all_reduce_perf -b 4 -e 8K -f 2
+
+# Test 2: RoCE Bandwidth Test (Large Messages)
+echo "=== RoCE Bandwidth Test (Large Messages) ==="
+mpirun -np 16 -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ./build/all_reduce_perf -b 32M -e 512M -f 2
+
+# Test 3: RoCE All-Gather Test
+echo "=== RoCE All-Gather Test ==="
+mpirun -np 16 -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ./build/all_gather_perf -b 16M -e 128M -f 2
+
+# Test 4: RoCE Comprehensive Range Test
+echo "=== RoCE Comprehensive Performance Range ==="
+mpirun -np 16 -hostfile ~/hostfile \
+    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
+    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    ./build/all_reduce_perf -b 1K -e 1G -f 2
 ```
 
-#### 7.4 Expected Multi-Node Performance
+**Expected RoCE Performance Characteristics:**
 
-Multi-node performance will be different from single-node due to network limitations:
+- **Latency**: 50-150μs for small messages (vs 12-16μs single-node)
+- **Bandwidth**: 20-25 GB/s peak aggregate (limited by network fabric)
+- **Scaling**: Linear scaling across 16 GPUs with network bottleneck
+- **Consistency**: Stable performance across multiple test iterations
 
-**Expected Characteristics:**
-- **Latency**: Higher base latency (50-200μs) due to network communication
-- **Bandwidth**: Limited by network speed (typically 25-100Gbps per node)
-- **Scaling**: Performance depends on network topology and number of nodes
-- **Consistency**: May show more variation due to network conditions
+**RoCE Validation Criteria:**
+- ✅ No communication errors (#wrong = 0)
+- ✅ Network latency <200μs 
+- ✅ Peak bandwidth >15 GB/s aggregate
+- ✅ Consistent scaling pattern across message sizes
 
-**Typical Performance Ranges:**
-- **Small messages**: 0.01 - 1 GB/s (latency-bound)
-- **Medium messages**: 1 - 10 GB/s (network transition)  
-- **Large messages**: 10 - 25 GB/s (network bandwidth-bound)
+> **Note**: Replace `<node1-hostname>` and `<node2-hostname>` with your actual node hostnames. This test validates that the RoCE backend network can efficiently handle GPU-to-GPU communication across the 25Gbps+ interconnect fabric.
 
-#### 7.5 Interpreting Multi-Node Results
+#### 7.2 Expected RoCE Performance Analysis
 
-Key metrics to evaluate:
+#### 7.2 Expected RoCE Performance Analysis
 
-- **Network Latency**: Base latency should be <200μs for good network
-- **Network Bandwidth**: Should approach your network speed (25Gbps ≈ 3GB/s per link)
-- **Scaling Efficiency**: Compare multi-node vs single-node bandwidth ratios
-- **Error Rate**: Should still be 0 errors across all tests
+RoCE performance with 16 GPUs across 2 nodes will show different characteristics compared to single-node performance:
 
-#### 7.6 Troubleshooting Multi-Node Issues
+**Performance Expectations:**
+- **Base Latency**: 50-150μs (vs 12-16μs intra-node)
+- **Peak Aggregate Bandwidth**: 15-25 GB/s (limited by network fabric)
+- **Per-GPU Effective Bandwidth**: 1-2 GB/s per GPU for inter-node communication
+- **Scaling Pattern**: Linear scaling up to network saturation point
 
-Common multi-node problems and solutions:
+**RoCE-Specific Characteristics:**
+- **RDMA Efficiency**: Direct GPU memory access across nodes
+- **Network Utilization**: Should approach 25Gbps+ per node theoretical limit
+- **Message Size Impact**: 
+  - Small messages (1KB-64KB): Latency-dominated, ~50-100μs
+  - Medium messages (256KB-16MB): Transition zone, improving efficiency
+  - Large messages (32MB+): Bandwidth-dominated, peak RoCE performance
+
+**Comparison to Single-Node:**
+- **Latency Increase**: ~4-10x higher due to network hops
+- **Bandwidth Reduction**: ~10-20x lower per GPU due to network sharing
+- **Efficiency Trade-off**: Network becomes the bottleneck vs GPU interconnect
+
+**What Good RoCE Performance Looks Like:**
+- ✅ Consistent latency <200μs across all message sizes
+- ✅ Aggregate bandwidth >15 GB/s for large messages
+- ✅ Linear scaling pattern with message size growth
+- ✅ No packet loss or communication errors
+- ✅ Stable performance across multiple test iterations
+
+#### 7.3 Interpreting RoCE Results
+
+#### 7.3 Interpreting RoCE Results
+
+Key metrics to validate RoCE performance with 16 GPUs across 2 nodes:
+
+**Primary RoCE Metrics:**
+- **Inter-Node Latency**: Base latency should be <150μs for optimal RoCE
+- **Network Bandwidth Utilization**: Should approach 20-25 GB/s aggregate
+- **RDMA Efficiency**: Compare bandwidth/latency ratio vs TCP
+- **Error Rate**: Must remain 0 across all tests for RoCE reliability
+
+**Performance Analysis Framework:**
+- **Latency Validation**: Measure small message (1KB-8KB) roundtrip time
+- **Bandwidth Saturation**: Identify message size where network peaks
+- **Scaling Efficiency**: Compare 16-GPU vs theoretical 8-GPU × 2 performance
+- **Consistency Check**: Verify stable performance across multiple runs
+
+**RoCE Health Indicators:**
+- ✅ **Low jitter**: Consistent timing across iterations
+- ✅ **Linear scaling**: Bandwidth increases predictably with message size
+- ✅ **No timeouts**: All NCCL operations complete successfully
+- ✅ **Memory efficiency**: Effective GPU memory bandwidth utilization
+
+**Troubleshooting RoCE Issues:**
+- **High latency (>200μs)**: Check network congestion, switch configuration
+- **Low bandwidth (<10 GB/s)**: Verify RoCE is enabled, not falling back to TCP
+- **Inconsistent performance**: Check for network packet loss or retransmissions
+- **Communication errors**: Validate RoCE stack configuration and drivers
+
+#### 7.4 Troubleshooting RoCE Issues
+
+#### 7.4 Troubleshooting RoCE Issues
+
+Common RoCE-specific problems and diagnostic approaches:
 
 ```bash
-# Problem: SSH connectivity issues
-# Solution: Verify SSH keys and network connectivity
+# Problem: RoCE not being used (falling back to TCP)
+# Solution: Verify RoCE configuration and NCCL transport selection
+export NCCL_DEBUG=INFO  # Temporarily enable verbose logging
+# Look for "NET/IB" or "RoCE" in NCCL output, not "NET/Socket"
+
+# Problem: High inter-node latency (>200μs)
+# Solution: Check RoCE stack and network path
+sudo ibv_devinfo  # Verify RDMA devices are detected
+ibv_rc_pingpong -d mlx5_0  # Test raw RoCE latency between nodes
+
+# Problem: Low RoCE bandwidth (<10 GB/s aggregate)
+# Solution: Validate network configuration and utilization
+# Test raw network performance with RoCE
+ib_write_bw -d mlx5_0 -a  # On one node
+ib_write_bw -d mlx5_0 <remote-node-ip>  # From other node
+
+# Problem: NCCL cannot find InfiniBand/RoCE device
+# Solution: Check RDMA drivers and device visibility
+lsmod | grep mlx  # Verify Mellanox drivers loaded
+ls /dev/infiniband/  # Should show uverbs and rdma_cm devices
+
+# Problem: Inconsistent RoCE performance
+# Solution: Monitor network statistics and congestion
+watch -n 1 'cat /proc/net/dev | grep bond0'  # Monitor network counters
+ethtool -S bond0 | grep -E '(error|drop|pause)'  # Check for errors
+
+# Problem: GPU memory allocation errors in multi-node
+# Solution: Check GPU memory fragmentation and usage
 for node in <node1> <node2>; do
-    ssh -o ConnectTimeout=5 $node "echo SSH OK" || echo "SSH FAILED to $node"
+    echo "=== GPU Memory Status on $node ==="
+    ssh $node "nvidia-smi --query-gpu=memory.used,memory.free --format=csv,nounits,noheader"
 done
 
-# Problem: NCCL cannot find network interface
-# Solution: Verify bond0 interface and NCCL_SOCKET_IFNAME
-ssh <node> "ip addr show bond0 && echo \$NCCL_SOCKET_IFNAME"
+# Problem: MPI process coordination failures
+# Solution: Verify hostfile and process distribution
+cat ~/hostfile  # Ensure correct node names and slot counts
+mpirun -np 16 -hostfile ~/hostfile hostname  # Test basic MPI coordination
 
-# Problem: Firewall blocking NCCL communication
-# Solution: Check and configure firewall (if needed)
-sudo ufw status
-# NCCL typically uses random high ports, ensure they're open
-
-# Problem: MPI not finding hosts
-# Solution: Verify hostfile format and DNS resolution
-cat ~/hostfile
-nslookup <node-hostname>
-
-# Problem: High latency or low bandwidth
-# Solution: Check network configuration and utilization
-# Test raw network performance between nodes
-iperf3 -s  # On one node
-iperf3 -c <node-ip> -t 30  # From another node
-
-# Problem: GPU memory errors across nodes
-# Solution: Check GPU memory on all nodes
-for node in <node1> <node2>; do
-    echo "=== GPU Memory on $node ==="
-    ssh $node "nvidia-smi --query-gpu=memory.used,memory.total --format=csv"
-done
+# Advanced RoCE Diagnostics
+# Check RoCE-specific counters and statistics
+sudo cat /sys/class/infiniband/mlx5_0/ports/1/counters/*
+# Monitor for packet drops, errors, or retransmissions
 ```
 
-> **Important**: Multi-node testing validates your distributed GPU cluster setup. Successful multi-node tests indicate your system is ready for distributed training workloads. If you encounter issues, verify network connectivity, SSH setup, and NCCL environment variables on all nodes.
+**RoCE Performance Optimization Tips:**
+- Ensure NCCL uses RoCE transport (look for "NET/IB" in logs)
+- Verify RoCE Priority Flow Control (PFC) is configured
+- Check that bond0 interface has proper MTU (9000 bytes)
+- Monitor for network congestion during tests
+- Validate that all 16 GPUs are participating in communication
+
+> **Important**: Successful RoCE testing with 16 GPUs validates that your DigitalOcean bare metal setup can handle production distributed training workloads. The RoCE backend provides the low-latency, high-bandwidth GPU-to-GPU communication essential for scaling deep learning across multiple nodes.
 
 ### Step 8: Performance Benchmarking
 
