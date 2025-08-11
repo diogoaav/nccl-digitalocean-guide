@@ -507,10 +507,11 @@ sudo apt install -y openmpi-bin openmpi-common libopenmpi-dev
 
 # RoCE Comprehensive Performance Test
 echo "=== RoCE Multi-Node Performance Validation (16 GPUs) ==="
-mpirun -np 16 -hostfile ~/hostfile \
-    --mca btl openib,self --mca btl_openib_allow_ib true \
+mpirun --allow-run-as-root -np 16 -hostfile ~/hostfile \
+    --mca btl ^openib --mca btl tcp,self \
+    --mca oob_tcp_if_include bond0 \
     --bind-to none \
-    -x NCCL_DEBUG=ERROR \
+    -x NCCL_DEBUG=INFO \
     -x NCCL_IB_DISABLE=0 \
     -x NCCL_NET_GDR_LEVEL=SYS \
     -x NCCL_IB_HCA=mlx5 \
