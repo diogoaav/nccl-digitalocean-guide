@@ -49,7 +49,7 @@ Inter-node tests are essential for:
 
 Running both intra-node and inter-node tests provides a complete picture of your GPU cluster's communication capabilities. Intra-node tests establish your baseline single-machine performance, while inter-node tests validate that your network infrastructure can effectively scale your workloads across multiple machines.
 
-## Prerequisites
+
 
 Before starting, ensure you have:
 
@@ -72,7 +72,24 @@ Before starting, ensure you have:
 
 ### Step 1: Create GPU Instances
 
-*Instructions to be added*
+To get started with DigitalOcean bare metal GPU instances, you'll need to contact the sales team as these are specialized resources that require custom provisioning.
+
+1. **Contact Sales Team**: Fill out the form at https://www.digitalocean.com/products/gradient/bare-metal-gpus?referrer=pdocs&utm_campaign=how-to-create-gradient-bare-metal-gpus#sales-form
+
+2. **Review Documentation**: Refer to the official guide on creating bare metal GPU instances: https://docs.digitalocean.com/products/bare-metal-gpus/how-to/create/
+
+3. **Instance Provisioning**: Once you've contacted sales and your requirements are approved:
+   - The DigitalOcean team will create your bare metal GPU instances
+   - You'll receive the necessary credentials and connection information
+   - The instances will be configured with your specified GPU configuration
+
+4. **What You'll Receive**:
+   - SSH access credentials (private key or password)
+   - IP addresses of your instances
+   - Instance specifications and GPU configuration details
+   - Network configuration information
+
+> **Note**: Bare metal GPU instances are custom-provisioned resources and may take some time to set up. Plan accordingly and ensure you have your requirements clearly defined when contacting the sales team.
 
 ### Step 2: Initial Configuration
 
