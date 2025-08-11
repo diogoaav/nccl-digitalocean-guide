@@ -478,14 +478,22 @@ Multi-node testing validates NCCL communication between GPUs across different ma
 
 #### 7.1 RoCE Performance Validation Test
 
-This test validates RoCE (RDMA over Converged Ethernet) performance between two nodes using all 16 GPUs (8 GPUs per node) to measure inter-node GPU communication capabilities.
+This test validates RoCE (RDMA over Converged Ethernet) performance between two nodes using all 16 GPUs (8 GPUs per node) leveraging the Mellanox ConnectX adapters for high-performance inter-node GPU communication.
 
 ```bash
 # On the MASTER node (first node)
 cd ~/nccl-tests
 
+# First, verify RoCE adapters are available
+ibstat | grep -E "(CA|State|Rate)" | head -20
+
 # Set clean output for RoCE performance testing
 export NCCL_DEBUG=ERROR
+
+# Configure NCCL to use RoCE transport
+export NCCL_IB_DISABLE=0
+export NCCL_NET_GDR_LEVEL=SYS
+export NCCL_IB_HCA=mlx5
 
 # Create hostfile for 2 nodes with 8 GPUs each
 cat > ~/hostfile << EOF
@@ -497,49 +505,33 @@ EOF
 sudo apt update
 sudo apt install -y openmpi-bin openmpi-common libopenmpi-dev
 
-# Test 1: RoCE Latency Test (Small Messages)
-echo "=== RoCE Latency Test (Small Messages) ==="
+# RoCE Comprehensive Performance Test
+echo "=== RoCE Multi-Node Performance Validation (16 GPUs) ==="
 mpirun -np 16 -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ./build/all_reduce_perf -b 4 -e 8K -f 2
-
-# Test 2: RoCE Bandwidth Test (Large Messages)
-echo "=== RoCE Bandwidth Test (Large Messages) ==="
-mpirun -np 16 -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ./build/all_reduce_perf -b 32M -e 512M -f 2
-
-# Test 3: RoCE All-Gather Test
-echo "=== RoCE All-Gather Test ==="
-mpirun -np 16 -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
-    ./build/all_gather_perf -b 16M -e 128M -f 2
-
-# Test 4: RoCE Comprehensive Range Test
-echo "=== RoCE Comprehensive Performance Range ==="
-mpirun -np 16 -hostfile ~/hostfile \
-    --mca btl tcp,self --mca btl_tcp_if_include bond0 \
-    --bind-to none -x NCCL_DEBUG=ERROR -x NCCL_SOCKET_IFNAME=bond0 \
+    --mca btl openib,self --mca btl_openib_allow_ib true \
+    --bind-to none \
+    -x NCCL_DEBUG=ERROR \
+    -x NCCL_IB_DISABLE=0 \
+    -x NCCL_NET_GDR_LEVEL=SYS \
+    -x NCCL_IB_HCA=mlx5 \
     ./build/all_reduce_perf -b 1K -e 1G -f 2
 ```
 
 **Expected RoCE Performance Characteristics:**
 
-- **Latency**: 50-150μs for small messages (vs 12-16μs single-node)
-- **Bandwidth**: 20-25 GB/s peak aggregate (limited by network fabric)
-- **Scaling**: Linear scaling across 16 GPUs with network bottleneck
-- **Consistency**: Stable performance across multiple test iterations
+- **Latency**: 15-50μs for small messages (RDMA optimization)
+- **Bandwidth**: 80-120 GB/s peak aggregate (400Gbps Mellanx adapters)
+- **Scaling**: Linear scaling across 16 GPUs with RDMA efficiency
+- **Transport**: Uses InfiniBand verbs over Ethernet (RoCE v2)
 
 **RoCE Validation Criteria:**
 - ✅ No communication errors (#wrong = 0)
-- ✅ Network latency <200μs 
-- ✅ Peak bandwidth >15 GB/s aggregate
+- ✅ NCCL uses "NET/IB" transport (not "NET/Socket")
+- ✅ Network latency <100μs with RDMA
+- ✅ Peak bandwidth >50 GB/s aggregate
 - ✅ Consistent scaling pattern across message sizes
 
-> **Note**: Replace `<node1-hostname>` and `<node2-hostname>` with your actual node hostnames. This test validates that the RoCE backend network can efficiently handle GPU-to-GPU communication across the 25Gbps+ interconnect fabric.
+> **Note**: Replace `<node1-hostname>` and `<node2-hostname>` with your actual node hostnames. This test validates that the Mellanox ConnectX RoCE adapters can efficiently handle GPU-to-GPU communication using RDMA over Ethernet, bypassing TCP/IP overhead for maximum performance.
 
 #### 7.2 Expected RoCE Performance Analysis
 
@@ -548,30 +540,31 @@ mpirun -np 16 -hostfile ~/hostfile \
 RoCE performance with 16 GPUs across 2 nodes will show different characteristics compared to single-node performance:
 
 **Performance Expectations:**
-- **Base Latency**: 50-150μs (vs 12-16μs intra-node)
-- **Peak Aggregate Bandwidth**: 15-25 GB/s (limited by network fabric)
-- **Per-GPU Effective Bandwidth**: 1-2 GB/s per GPU for inter-node communication
-- **Scaling Pattern**: Linear scaling up to network saturation point
+- **Base Latency**: 15-50μs with RDMA optimization (vs 12-16μs intra-node)
+- **Peak Aggregate Bandwidth**: 50-120 GB/s (leveraging 400Gbps Mellanox adapters)
+- **Per-GPU Effective Bandwidth**: 3-7 GB/s per GPU for inter-node communication
+- **Scaling Pattern**: Near-linear scaling with RDMA efficiency
 
 **RoCE-Specific Characteristics:**
-- **RDMA Efficiency**: Direct GPU memory access across nodes
-- **Network Utilization**: Should approach 25Gbps+ per node theoretical limit
+- **RDMA Efficiency**: Direct GPU memory access across nodes without CPU involvement
+- **Network Utilization**: Can approach 400Gbps per adapter theoretical limit
+- **Transport Layer**: InfiniBand verbs over Ethernet (RoCE v2)
 - **Message Size Impact**: 
-  - Small messages (1KB-64KB): Latency-dominated, ~50-100μs
-  - Medium messages (256KB-16MB): Transition zone, improving efficiency
+  - Small messages (1KB-64KB): Latency-dominated, ~15-30μs with RDMA
+  - Medium messages (256KB-16MB): Transition zone, RDMA efficiency gains
   - Large messages (32MB+): Bandwidth-dominated, peak RoCE performance
 
 **Comparison to Single-Node:**
-- **Latency Increase**: ~4-10x higher due to network hops
-- **Bandwidth Reduction**: ~10-20x lower per GPU due to network sharing
-- **Efficiency Trade-off**: Network becomes the bottleneck vs GPU interconnect
+- **Latency Increase**: ~2-4x higher due to network hops (RDMA optimized)
+- **Bandwidth Scaling**: ~3-6x higher aggregate than TCP-based networking
+- **Efficiency Trade-off**: RDMA provides direct memory access vs GPU interconnect
 
 **What Good RoCE Performance Looks Like:**
-- ✅ Consistent latency <200μs across all message sizes
-- ✅ Aggregate bandwidth >15 GB/s for large messages
-- ✅ Linear scaling pattern with message size growth
-- ✅ No packet loss or communication errors
-- ✅ Stable performance across multiple test iterations
+- ✅ Consistent latency <100μs across all message sizes
+- ✅ Aggregate bandwidth >50 GB/s for large messages
+- ✅ NCCL logs show "NET/IB" transport (not "NET/Socket")
+- ✅ No RDMA completion errors or timeouts
+- ✅ Linear scaling with message size growth
 
 #### 7.3 Interpreting RoCE Results
 
@@ -580,28 +573,28 @@ RoCE performance with 16 GPUs across 2 nodes will show different characteristics
 Key metrics to validate RoCE performance with 16 GPUs across 2 nodes:
 
 **Primary RoCE Metrics:**
-- **Inter-Node Latency**: Base latency should be <150μs for optimal RoCE
-- **Network Bandwidth Utilization**: Should approach 20-25 GB/s aggregate
-- **RDMA Efficiency**: Compare bandwidth/latency ratio vs TCP
-- **Error Rate**: Must remain 0 across all tests for RoCE reliability
+- **Inter-Node Latency**: Base latency should be <100μs for optimal RoCE with RDMA
+- **Network Bandwidth Utilization**: Should approach 50-120 GB/s aggregate
+- **RDMA Efficiency**: Direct GPU memory access without CPU copy overhead
+- **Transport Validation**: NCCL must use "NET/IB" not "NET/Socket"
 
 **Performance Analysis Framework:**
-- **Latency Validation**: Measure small message (1KB-8KB) roundtrip time
-- **Bandwidth Saturation**: Identify message size where network peaks
+- **Latency Validation**: Measure small message (1KB-8KB) RDMA roundtrip time
+- **Bandwidth Saturation**: Identify message size where Mellanox adapters peak
 - **Scaling Efficiency**: Compare 16-GPU vs theoretical 8-GPU × 2 performance
-- **Consistency Check**: Verify stable performance across multiple runs
+- **RDMA Health**: Verify InfiniBand verbs are being used effectively
 
 **RoCE Health Indicators:**
-- ✅ **Low jitter**: Consistent timing across iterations
+- ✅ **Low RDMA latency**: Consistent timing <100μs with direct memory access
 - ✅ **Linear scaling**: Bandwidth increases predictably with message size
-- ✅ **No timeouts**: All NCCL operations complete successfully
-- ✅ **Memory efficiency**: Effective GPU memory bandwidth utilization
+- ✅ **No RDMA errors**: All NCCL operations complete without InfiniBand faults
+- ✅ **High memory efficiency**: Effective GPU memory bandwidth via RDMA
 
 **Troubleshooting RoCE Issues:**
-- **High latency (>200μs)**: Check network congestion, switch configuration
-- **Low bandwidth (<10 GB/s)**: Verify RoCE is enabled, not falling back to TCP
-- **Inconsistent performance**: Check for network packet loss or retransmissions
-- **Communication errors**: Validate RoCE stack configuration and drivers
+- **High latency (>100μs)**: Check RDMA stack, not falling back to TCP
+- **Low bandwidth (<30 GB/s)**: Verify RoCE is enabled, InfiniBand verbs working
+- **"NET/Socket" in logs**: NCCL falling back to TCP, check IB configuration
+- **RDMA completion errors**: Validate Mellanox drivers and adapter status
 
 #### 7.4 Troubleshooting RoCE Issues
 
@@ -610,58 +603,62 @@ Key metrics to validate RoCE performance with 16 GPUs across 2 nodes:
 Common RoCE-specific problems and diagnostic approaches:
 
 ```bash
-# Problem: RoCE not being used (falling back to TCP)
-# Solution: Verify RoCE configuration and NCCL transport selection
+# Problem: NCCL falling back to TCP instead of RoCE
+# Solution: Verify InfiniBand/RoCE configuration and NCCL transport selection
 export NCCL_DEBUG=INFO  # Temporarily enable verbose logging
-# Look for "NET/IB" or "RoCE" in NCCL output, not "NET/Socket"
+# Look for "NET/IB" in NCCL output, NOT "NET/Socket"
 
-# Problem: High inter-node latency (>200μs)
-# Solution: Check RoCE stack and network path
-sudo ibv_devinfo  # Verify RDMA devices are detected
-ibv_rc_pingpong -d mlx5_0  # Test raw RoCE latency between nodes
+# Problem: High inter-node latency (>100μs) with RoCE
+# Solution: Check RDMA stack and Mellanox adapter status
+ibstat  # Verify all adapters show "State: Active"
+ibv_devinfo  # Check RDMA device capabilities
 
-# Problem: Low RoCE bandwidth (<10 GB/s aggregate)
-# Solution: Validate network configuration and utilization
-# Test raw network performance with RoCE
-ib_write_bw -d mlx5_0 -a  # On one node
-ib_write_bw -d mlx5_0 <remote-node-ip>  # From other node
+# Problem: Low RoCE bandwidth (<30 GB/s aggregate)
+# Solution: Validate Mellanx adapter performance and RDMA functionality
+# Test raw RDMA performance between nodes
+ib_write_bw -d mlx5_0 -a  # On first node
+ib_write_bw -d mlx5_0 <remote-node-ip>  # From second node
 
-# Problem: NCCL cannot find InfiniBand/RoCE device
+# Problem: NCCL cannot find InfiniBand/RoCE devices
 # Solution: Check RDMA drivers and device visibility
-lsmod | grep mlx  # Verify Mellanox drivers loaded
-ls /dev/infiniband/  # Should show uverbs and rdma_cm devices
+lsmod | grep mlx  # Verify Mellanox drivers are loaded
+ls /dev/infiniband/  # Should show uverbs* and rdma_cm devices
+ibv_devices  # List available RDMA devices
 
-# Problem: Inconsistent RoCE performance
-# Solution: Monitor network statistics and congestion
-watch -n 1 'cat /proc/net/dev | grep bond0'  # Monitor network counters
-ethtool -S bond0 | grep -E '(error|drop|pause)'  # Check for errors
+# Problem: Inconsistent RoCE performance across runs
+# Solution: Monitor Mellanox adapter statistics and errors
+ibstat | grep -A 20 "mlx5_0"  # Check specific adapter status
+cat /sys/class/infiniband/mlx5_0/ports/1/counters/*  # Monitor counters
 
-# Problem: GPU memory allocation errors in multi-node
-# Solution: Check GPU memory fragmentation and usage
+# Problem: GPU memory allocation errors in multi-node RoCE
+# Solution: Check GPU memory fragmentation and RDMA registration
 for node in <node1> <node2>; do
     echo "=== GPU Memory Status on $node ==="
     ssh $node "nvidia-smi --query-gpu=memory.used,memory.free --format=csv,nounits,noheader"
 done
 
-# Problem: MPI process coordination failures
-# Solution: Verify hostfile and process distribution
+# Problem: MPI process coordination failures with RoCE
+# Solution: Verify hostfile and OpenMPI InfiniBand configuration
 cat ~/hostfile  # Ensure correct node names and slot counts
 mpirun -np 16 -hostfile ~/hostfile hostname  # Test basic MPI coordination
 
 # Advanced RoCE Diagnostics
-# Check RoCE-specific counters and statistics
-sudo cat /sys/class/infiniband/mlx5_0/ports/1/counters/*
-# Monitor for packet drops, errors, or retransmissions
+# Check specific Mellanox adapter details and performance
+sudo mlxconfig -d /dev/mst/mt4129_pciconf0 query  # Mellanox adapter config
+perfquery -a  # InfiniBand performance counters (if available)
+
+# Verify RoCE is active and not falling back to standard Ethernet
+ethtool -k mlx5_0 | grep -i roce  # Should show RoCE capabilities
 ```
 
 **RoCE Performance Optimization Tips:**
-- Ensure NCCL uses RoCE transport (look for "NET/IB" in logs)
-- Verify RoCE Priority Flow Control (PFC) is configured
-- Check that bond0 interface has proper MTU (9000 bytes)
-- Monitor for network congestion during tests
-- Validate that all 16 GPUs are participating in communication
+- Ensure NCCL uses InfiniBand transport (look for "NET/IB" in logs)
+- Verify all `mlx5_*` adapters show "State: Active" in `ibstat`
+- Check that RoCE Priority Flow Control (PFC) is configured on switches
+- Monitor Mellanox adapter statistics for errors or retransmissions
+- Validate that RDMA verbs are working with `ibv_devinfo`
 
-> **Important**: Successful RoCE testing with 16 GPUs validates that your DigitalOcean bare metal setup can handle production distributed training workloads. The RoCE backend provides the low-latency, high-bandwidth GPU-to-GPU communication essential for scaling deep learning across multiple nodes.
+> **Important**: Successful RoCE testing with Mellanox ConnectX adapters validates that your DigitalOcean bare metal setup can handle production distributed training workloads. The RoCE backend with RDMA provides the low-latency, high-bandwidth GPU-to-GPU communication essential for scaling deep learning across multiple nodes at near-native InfiniBand performance levels.
 
 ### Step 8: Performance Benchmarking
 
