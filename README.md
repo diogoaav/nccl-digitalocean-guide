@@ -356,7 +356,175 @@ done
 
 ### Step 6: Single Node Testing
 
-*Instructions to be added*
+Single node testing validates that all GPUs within one machine can communicate effectively through NCCL. This establishes your baseline performance before attempting multi-node scaling.
+
+#### 6.1 Verify GPU Availability
+
+First, confirm that all GPUs are detected and accessible:
+
+```bash
+# Check GPU count and status
+nvidia-smi
+
+# Verify NCCL can detect all GPUs
+cd ~/nccl-tests
+./build/all_reduce_perf -b 8 -e 128M -f 2 -g $(nvidia-smi -L | wc -l)
+```
+
+#### 6.2 Basic NCCL All-Reduce Test
+
+Start with a basic all-reduce test to verify GPU-to-GPU communication:
+
+```bash
+# Navigate to NCCL tests directory
+cd ~/nccl-tests
+
+# Run basic all-reduce test with automatic GPU detection
+# This tests communication between all available GPUs
+./build/all_reduce_perf -b 1K -e 1G -f 2
+
+# Run with specific GPU count (replace X with your GPU count)
+./build/all_reduce_perf -b 1K -e 1G -f 2 -g X
+```
+
+**Expected Output Example:**
+```
+# nThread 1 nGpus X test 0
+#       size         count      type   redop    root     time   algbw   busbw #wrong     time   algbw   busbw #wrong
+#        (B)    (elements)                     (us)  (GB/s)  (GB/s)            (us)  (GB/s)  (GB/s)       
+           1K             256     float     sum      -1    15.2    0.07    0.12      0    15.1    0.07    0.12      0
+           2K             512     float     sum      -1    15.4    0.13    0.23      0    15.3    0.13    0.23      0
+           4K            1024     float     sum      -1    15.6    0.26    0.45      0    15.5    0.26    0.45      0
+```
+
+#### 6.3 Comprehensive Single Node Test Suite
+
+Run multiple NCCL operations to thoroughly test GPU communication:
+
+```bash
+# All-Reduce test (most common operation)
+echo "=== Running All-Reduce Test ==="
+./build/all_reduce_perf -b 8 -e 128M -f 2
+
+# All-Gather test
+echo "=== Running All-Gather Test ==="
+./build/all_gather_perf -b 8 -e 128M -f 2
+
+# Broadcast test
+echo "=== Running Broadcast Test ==="
+./build/broadcast_perf -b 8 -e 128M -f 2
+
+# Reduce-Scatter test
+echo "=== Running Reduce-Scatter Test ==="
+./build/reduce_scatter_perf -b 8 -e 128M -f 2
+```
+
+#### 6.4 Bandwidth and Latency Analysis
+
+Test different message sizes to analyze bandwidth and latency characteristics:
+
+```bash
+# Test small messages (latency-bound)
+echo "=== Testing Small Messages (Latency) ==="
+./build/all_reduce_perf -b 4 -e 8K -f 2
+
+# Test medium messages
+echo "=== Testing Medium Messages ==="
+./build/all_reduce_perf -b 32K -e 1M -f 2
+
+# Test large messages (bandwidth-bound)
+echo "=== Testing Large Messages (Bandwidth) ==="
+./build/all_reduce_perf -b 16M -e 512M -f 2
+```
+
+#### 6.5 Performance Validation
+
+Create a simple script to run comprehensive single-node validation:
+
+```bash
+# Create a single-node test script
+cat > ~/single_node_test.sh << 'EOF'
+#!/bin/bash
+
+echo "=== NCCL Single Node Performance Test ==="
+echo "Date: $(date)"
+echo "Hostname: $(hostname)"
+echo "GPU Count: $(nvidia-smi -L | wc -l)"
+echo "CUDA Version: $(nvcc --version | grep release)"
+echo ""
+
+cd ~/nccl-tests
+
+# Set NCCL debug level for detailed output
+export NCCL_DEBUG=INFO
+
+# Test 1: Quick validation
+echo "=== Test 1: Quick All-Reduce Validation ==="
+./build/all_reduce_perf -b 1M -e 16M -f 2 -g $(nvidia-smi -L | wc -l)
+echo ""
+
+# Test 2: Latency test
+echo "=== Test 2: Latency Test (Small Messages) ==="
+./build/all_reduce_perf -b 4 -e 1K -f 2
+echo ""
+
+# Test 3: Bandwidth test
+echo "=== Test 3: Bandwidth Test (Large Messages) ==="
+./build/all_reduce_perf -b 32M -e 128M -f 2
+echo ""
+
+# Test 4: Multiple operations
+echo "=== Test 4: Multiple NCCL Operations ==="
+for op in all_reduce all_gather broadcast reduce_scatter; do
+    echo "Testing $op..."
+    ./build/${op}_perf -b 1M -e 4M -f 2
+done
+
+echo "=== Single Node Testing Complete ==="
+EOF
+
+# Make script executable and run it
+chmod +x ~/single_node_test.sh
+~/single_node_test.sh
+```
+
+#### 6.6 Interpreting Results
+
+Understanding the output from NCCL tests:
+
+- **size (B)**: Message size in bytes
+- **count (elements)**: Number of elements being processed
+- **time (us)**: Time taken in microseconds
+- **algbw (GB/s)**: Algorithm bandwidth (actual data transfer rate)
+- **busbw (GB/s)**: Bus bandwidth (includes communication overhead)
+- **#wrong**: Number of errors (should be 0)
+
+**Good Performance Indicators:**
+- No errors (#wrong = 0)
+- Consistent timing across runs
+- High bandwidth for large messages (>50GB/s for modern GPUs)
+- Low latency for small messages (<20μs)
+
+#### 6.7 Troubleshooting Single Node Issues
+
+If you encounter issues, try these debugging steps:
+
+```bash
+# Check for GPU memory issues
+nvidia-smi
+
+# Run with verbose debugging
+export NCCL_DEBUG=TRACE
+./build/all_reduce_perf -b 1M -e 1M -f 1
+
+# Test with fewer GPUs to isolate issues
+./build/all_reduce_perf -b 1M -e 1M -f 1 -g 2
+
+# Check CUDA context creation
+./build/all_reduce_perf -b 1M -e 1M -f 1 -w 5 -n 5
+```
+
+> **Note**: Single node testing should complete without errors and show reasonable performance numbers. If you see consistent errors or very low bandwidth (<10GB/s), check your GPU installation and CUDA environment before proceeding to multi-node testing.
 
 ### Step 7: Multi-Node Testing
 
