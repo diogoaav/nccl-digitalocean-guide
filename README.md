@@ -63,10 +63,9 @@ Before starting, ensure you have:
 1. [Setting Up DigitalOcean Bare Metal Instances](#setting-up-digitalocean-bare-metal-instances)
 2. [Installing Dependencies](#installing-dependencies)
 3. [Configuring NCCL](#configuring-nccl)
-4. [Network Configuration](#network-configuration)
-5. [Running Tests](#running-tests)
-6. [Troubleshooting](#troubleshooting)
-7. [Performance Optimization](#performance-optimization)
+4. [Running Tests](#running-tests)
+5. [Troubleshooting](#troubleshooting)
+6. [Performance Optimization](#performance-optimization)
 
 ## Setting Up DigitalOcean Bare Metal Instances
 
@@ -331,41 +330,102 @@ The tests should now be available in the `build/` directory and ready for use in
 
 > **Note**: If you encounter any build errors, ensure that your CUDA environment variables are properly set and that you have development tools installed (`build-essential` package).
 
-### Step 5: Install NCCL
-
-*Instructions to be added*
-
 ## Configuring NCCL
 
-### Step 6: Environment Setup
+### Step 5: Environment Setup
 
-*Instructions to be added*
+Now that NCCL is installed, let's configure the environment for optimal multi-GPU communication.
 
-### Step 7: Network Configuration
+#### 5.1 Configure CUDA Environment Variables
 
-*Instructions to be added*
+Set up the necessary CUDA environment variables:
 
-## Network Configuration
+```bash
+# Add CUDA to your environment (add to ~/.bashrc for persistence)
+export CUDA_HOME=/usr/local/cuda
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
-### Step 8: Configure RoCE (RDMA over Converged Ethernet)
+# Make changes persistent
+echo 'export CUDA_HOME=/usr/local/cuda' >> ~/.bashrc
+echo 'export PATH=$CUDA_HOME/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
 
-*Instructions to be added*
+# Reload environment
+source ~/.bashrc
+```
 
-### Step 9: Optimize Network Settings
+#### 5.2 Configure NCCL Environment Variables
 
-*Instructions to be added*
+Set up NCCL-specific environment variables for debugging and optimization:
+
+```bash
+# Enable NCCL debugging (useful for troubleshooting)
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+
+# Configure network interface (use bond0 for DigitalOcean)
+export NCCL_SOCKET_IFNAME=bond0
+
+# Add to ~/.bashrc for persistence
+echo 'export NCCL_DEBUG=INFO' >> ~/.bashrc
+echo 'export NCCL_DEBUG_SUBSYS=ALL' >> ~/.bashrc
+echo 'export NCCL_SOCKET_IFNAME=bond0' >> ~/.bashrc
+
+# Reload environment
+source ~/.bashrc
+```
+
+#### 5.3 Set Up SSH Keys for Multi-Node Communication
+
+For multi-node testing, configure passwordless SSH between nodes:
+
+```bash
+# Generate SSH key pair (if not already present)
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+
+# Copy public key to other nodes (replace with actual hostnames/IPs)
+ssh-copy-id root@<other-node-hostname>
+ssh-copy-id root@<another-node-hostname>
+
+# Test passwordless SSH connectivity
+ssh <other-node-hostname> "hostname"
+```
+
+#### 5.4 Verify Environment Configuration
+
+Test that your environment is properly configured:
+
+```bash
+# Verify CUDA environment
+nvcc --version
+echo $CUDA_HOME
+echo $PATH | grep cuda
+
+# Verify NCCL environment variables
+echo $NCCL_DEBUG
+echo $NCCL_SOCKET_IFNAME
+
+# Test multi-node SSH connectivity
+for node in <node1-hostname> <node2-hostname>; do
+    echo "Testing SSH to $node:"
+    ssh $node "hostname && nvidia-smi --query-gpu=name --format=csv,noheader,nounits"
+done
+```
+
+> **Note**: Replace `<node-hostnames>` with your actual node hostnames from Step 2. Ensure all nodes can communicate via SSH before proceeding to the testing steps.
 
 ## Running Tests
 
-### Step 10: Single Node Testing
+### Step 6: Single Node Testing
 
 *Instructions to be added*
 
-### Step 11: Multi-Node Testing
+### Step 7: Multi-Node Testing
 
 *Instructions to be added*
 
-### Step 12: Performance Benchmarking
+### Step 8: Performance Benchmarking
 
 *Instructions to be added*
 
