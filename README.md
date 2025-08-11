@@ -379,6 +379,9 @@ Start with a basic all-reduce test to verify GPU-to-GPU communication:
 # Navigate to NCCL tests directory
 cd ~/nccl-tests
 
+# Set NCCL to show only errors for cleaner output
+export NCCL_DEBUG=ERROR
+
 # Run basic all-reduce test with automatic GPU detection
 # This tests communication between all available GPUs
 ./build/all_reduce_perf -b 1K -e 1G -f 2
@@ -386,6 +389,12 @@ cd ~/nccl-tests
 # Run with specific GPU count (replace X with your GPU count)
 ./build/all_reduce_perf -b 1K -e 1G -f 2 -g X
 ```
+
+**NCCL Debug Level Options:**
+- `NCCL_DEBUG=ERROR` - Show only errors (recommended for clean output)
+- `NCCL_DEBUG=WARN` - Show warnings and errors
+- `NCCL_DEBUG=INFO` - Show informational messages (verbose)
+- `NCCL_DEBUG=TRACE` - Show all debug information (very verbose)
 
 **Expected Output Example:**
 ```
@@ -402,6 +411,9 @@ cd ~/nccl-tests
 Run multiple NCCL operations to thoroughly test GPU communication:
 
 ```bash
+# Set clean output (only show errors)
+export NCCL_DEBUG=ERROR
+
 # All-Reduce test (most common operation)
 echo "=== Running All-Reduce Test ==="
 ./build/all_reduce_perf -b 8 -e 128M -f 2
@@ -424,6 +436,9 @@ echo "=== Running Reduce-Scatter Test ==="
 Test different message sizes to analyze bandwidth and latency characteristics:
 
 ```bash
+# Set clean output for performance testing
+export NCCL_DEBUG=ERROR
+
 # Test small messages (latency-bound)
 echo "=== Testing Small Messages (Latency) ==="
 ./build/all_reduce_perf -b 4 -e 8K -f 2
@@ -455,8 +470,8 @@ echo ""
 
 cd ~/nccl-tests
 
-# Set NCCL debug level for detailed output
-export NCCL_DEBUG=INFO
+# Set NCCL to show only errors for clean output
+export NCCL_DEBUG=ERROR
 
 # Test 1: Quick validation
 echo "=== Test 1: Quick All-Reduce Validation ==="
@@ -513,16 +528,26 @@ If you encounter issues, try these debugging steps:
 # Check for GPU memory issues
 nvidia-smi
 
-# Run with verbose debugging
+# Run with verbose debugging (when troubleshooting)
+export NCCL_DEBUG=INFO
+./build/all_reduce_perf -b 1M -e 1M -f 1
+
+# For detailed debugging (very verbose)
 export NCCL_DEBUG=TRACE
 ./build/all_reduce_perf -b 1M -e 1M -f 1
 
-# Test with fewer GPUs to isolate issues
+# Test with fewer GPUs to isolate issues (clean output)
+export NCCL_DEBUG=ERROR
 ./build/all_reduce_perf -b 1M -e 1M -f 1 -g 2
 
 # Check CUDA context creation
 ./build/all_reduce_perf -b 1M -e 1M -f 1 -w 5 -n 5
 ```
+
+**Debug Level Usage:**
+- Use `NCCL_DEBUG=ERROR` for normal testing (clean output)
+- Use `NCCL_DEBUG=INFO` when you need setup information
+- Use `NCCL_DEBUG=TRACE` only when debugging specific issues
 
 > **Note**: Single node testing should complete without errors and show reasonable performance numbers. If you see consistent errors or very low bandwidth (<10GB/s), check your GPU installation and CUDA environment before proceeding to multi-node testing.
 
