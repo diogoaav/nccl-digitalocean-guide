@@ -4,6 +4,55 @@
 
 This guide covers setting up and running NCCL (NVIDIA Collective Communications Library) tests between bare metal GPU nodes using RoCE (RDMA over Converged Ethernet) fabric for high-performance inter-node communication.
 
+### Why Run NCCL Tests?
+
+NCCL tests are essential benchmarking tools that validate and measure GPU-to-GPU communication performance in distributed computing environments. These tests help ensure your multi-GPU cluster is working optimally for:
+
+- **Distributed Deep Learning**: Training large neural networks across multiple GPUs and nodes
+- **High-Performance Computing**: Scientific computing workloads requiring massive parallel processing
+- **AI/ML Workloads**: Large-scale machine learning model training and inference
+- **Performance Validation**: Ensuring hardware investments deliver expected performance
+
+### Expected Performance Results
+
+#### Single Node Testing with NVSwitch
+For single-node testing with NVSwitch interconnect (like H100 systems), you can expect:
+
+- **Peak Bandwidth**: 300-400+ GB/s aggregate bandwidth for large message sizes (>64MB)
+- **Low Latency**: Base latency of 10-20μs for small messages
+- **Linear Scaling**: Near-perfect scaling across all GPUs within the node
+- **High Efficiency**: >90% of theoretical interconnect bandwidth utilization
+- **Consistent Performance**: Minimal variance across test runs
+
+**Example Single-Node Performance (8x H100 with NVSwitch):**
+- Small messages (1KB-32KB): Latency-dominated, ~15-25μs
+- Medium messages (256KB-16MB): Rapid bandwidth scaling to 100+ GB/s
+- Large messages (64MB+): Peak performance 350-450 GB/s aggregate
+
+#### Multi-Node Testing with RoCE Fabric
+For multi-node testing over RoCE (RDMA over Converged Ethernet), expect:
+
+- **Network Bandwidth**: 50-120 GB/s aggregate bandwidth (depends on adapter speed)
+- **RDMA Latency**: 15-50μs for small messages with RDMA optimization
+- **Scaling Efficiency**: Near-linear scaling with RDMA direct memory access
+- **Transport Protocol**: InfiniBand verbs over Ethernet (RoCE v2)
+- **Performance Scaling**: 3-7 GB/s effective per-GPU bandwidth for inter-node communication
+
+**Example Multi-Node Performance (2 nodes, 16 GPUs total over 400Gbps RoCE):**
+- Small messages: RDMA-optimized latency <100μs
+- Large messages: 80-120 GB/s peak aggregate bandwidth
+- Efficiency: Direct GPU memory access without CPU copy overhead
+
+### RoCE vs. TCP/IP Performance Comparison
+
+| Metric | RoCE (RDMA) | TCP/IP |
+|--------|-------------|---------|
+| Latency | 15-50μs | 100-500μs |
+| CPU Overhead | Minimal (kernel bypass) | High (CPU processing) |
+| Bandwidth Efficiency | 85-95% | 60-80% |
+| Memory Access | Direct GPU memory | System memory copy |
+| Protocol | InfiniBand verbs | Standard networking stack |
+
 ## Prerequisites
 
 - Multiple bare metal servers with NVIDIA GPUs
@@ -25,15 +74,28 @@ make -j16 MPI=1 MPI_HOME=/usr/lib/x86_64-linux-gnu/openmpi/
 3. [Quick Setup](#3-quick-setup)
 4. [Single Node Test](#4-single-node-test)
 5. [Multi-Node Test](#5-multi-node-test)
-6. [Troubleshooting](#troubleshooting)
+6. [Troubleshooting](#6-troubleshooting)
 
 ## 1. Hardware and Network Setup
 
 ### Network Infrastructure Requirements
 
-- **Switch Configuration**: Enable PFC (Priority Flow Control) and ECN (Explicit Congestion Notification)
-- **Cabling**: Use appropriate cables (typically 25GbE, 50GbE, or 100GbE)
-- **Network Topology**: Ensure low-latency, high-bandwidth connectivity between nodes
+**Note: DigitalOcean Pre-Configured Infrastructure**
+
+DigitalOcean bare metal GPU instances come with pre-configured high-performance networking infrastructure optimized for GPU workloads. The following components are already set up and managed by DigitalOcean:
+
+- **Switch Configuration**: PFC (Priority Flow Control) and ECN (Explicit Congestion Notification) are pre-configured on the network fabric
+- **RoCE Infrastructure**: RDMA over Converged Ethernet is enabled and optimized for GPU-to-GPU communication
+- **Cabling**: High-speed network connections (typically 400GbE) between nodes are professionally installed
+- **Network Topology**: Low-latency, high-bandwidth connectivity with optimized routing between GPU nodes
+- **VLAN Configuration**: Dedicated VLANs for GPU backend communication are pre-configured
+- **Mellanox ConnectX Adapters**: High-performance RDMA-capable network adapters are installed and configured
+
+**What This Means for You:**
+- No manual network configuration required
+- Optimal performance out-of-the-box
+- Enterprise-grade network reliability
+- Professional cable management and topology design
 
 ### Verify GPU and Network Hardware
 
@@ -232,7 +294,7 @@ chmod +x ~/test_multi_node.sh
 
 **Expected Output:** Look for `busbw` > 400 GB/s across nodes.
 
-## Troubleshooting
+## 6. Troubleshooting
 
 ### Abrupt Test Termination
 
