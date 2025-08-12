@@ -507,15 +507,52 @@ sudo apt install -y openmpi-bin openmpi-common libopenmpi-dev
 
 # RoCE Comprehensive Performance Test
 echo "=== RoCE Multi-Node Performance Validation (16 GPUs) ==="
+
+# First, verify RoCE adapters are available
+export NCCL_DEBUG=WARN
+
+# Step 0: Verify hostfile and basic connectivity
+echo "=== Step 0: Verify Configuration ==="
+echo "Checking hostfile:"
+cat ~/hostfile
+echo
+echo "Testing SSH connectivity:"
+mpirun --allow-run-as-root -np 16 -hostfile ~/hostfile hostname
+echo
+
+# Start with a simpler test to validate RoCE connectivity
+echo "=== Step 1: Basic RoCE Connectivity Test ==="
 mpirun --allow-run-as-root -np 16 -hostfile ~/hostfile \
     --mca btl tcp,self \
     --mca oob_tcp_if_include bond0 \
+    --mca pml ob1 \
     --bind-to none \
-    -x NCCL_DEBUG=INFO \
+    -x NCCL_DEBUG=WARN \
     -x NCCL_IB_DISABLE=0 \
     -x NCCL_NET_GDR_LEVEL=SYS \
     -x NCCL_IB_HCA=mlx5 \
-    ./build/all_reduce_perf -b 1K -e 1G -f 2
+    -x NCCL_TIMEOUT=1800 \
+    -x NCCL_SOCKET_IFNAME=bond0 \
+    -x NCCL_IB_TIMEOUT=23 \
+    -x NCCL_IB_RETRY_CNT=7 \
+    ./build/all_reduce_perf -b 8M -e 8M -f 2 -w 5 -n 5
+
+# If successful, run a broader range test
+echo "=== Step 2: RoCE Performance Range Test ==="
+mpirun --allow-run-as-root -np 16 -hostfile ~/hostfile \
+    --mca btl tcp,self \
+    --mca oob_tcp_if_include bond0 \
+    --mca pml ob1 \
+    --bind-to none \
+    -x NCCL_DEBUG=ERROR \
+    -x NCCL_IB_DISABLE=0 \
+    -x NCCL_NET_GDR_LEVEL=SYS \
+    -x NCCL_IB_HCA=mlx5 \
+    -x NCCL_TIMEOUT=1800 \
+    -x NCCL_SOCKET_IFNAME=bond0 \
+    -x NCCL_IB_TIMEOUT=23 \
+    -x NCCL_IB_RETRY_CNT=7 \
+    ./build/all_reduce_perf -b 1M -e 128M -f 2
 ```
 
 **Expected RoCE Performance Characteristics:**
